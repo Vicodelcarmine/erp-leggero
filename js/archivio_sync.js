@@ -17,6 +17,11 @@
     return String(id || "").trim().toUpperCase();
   }
 
+  function normalizzaChiave(valore) {
+    const testo = String(valore || "").trim().replace(/\s+/g, "");
+    return testo.replace(/^sb_publishable_/i, "sb_publishable_");
+  }
+
   function canon(val) {
     if (Array.isArray(val)) return "[" + val.map(canon).join(",") + "]";
     if (val && typeof val === "object") {
@@ -288,6 +293,7 @@
     confermaInvio: confermaInvio,
     daRighe: daRighe,
     idDi: idDi,
+    normalizzaChiave: normalizzaChiave,
     canon: canon,
     liste: LISTE,
   };

@@ -31,11 +31,19 @@
     else box.setItem(chiave, JSON.stringify(valore));
   }
 
+  function chiavePulita(valore) {
+    if (root.ErpArchivioSync && root.ErpArchivioSync.normalizzaChiave) {
+      return root.ErpArchivioSync.normalizzaChiave(valore);
+    }
+    const testo = String(valore || "").trim().replace(/\s+/g, "");
+    return testo.replace(/^sb_publishable_/i, "sb_publishable_");
+  }
+
   function configFile() {
     const c = root.ErpArchivioConfig || {};
     return {
       url: String(c.url || "").trim().replace(/\/+$/, ""),
-      chiave: String(c.chiave || "").trim(),
+      chiave: chiavePulita(c.chiave),
     };
   }
 
@@ -44,7 +52,7 @@
     const salvata = leggiJson(CHIAVE_CFG) || {};
     return {
       url: file.url || String(salvata.url || "").trim().replace(/\/+$/, ""),
-      chiave: file.chiave || String(salvata.chiave || "").trim(),
+      chiave: file.chiave || chiavePulita(salvata.chiave),
     };
   }
 
@@ -56,7 +64,7 @@
   function salvaConfig(url, chiave) {
     scriviJson(CHIAVE_CFG, {
       url: String(url || "").trim().replace(/\/+$/, ""),
-      chiave: String(chiave || "").trim(),
+      chiave: chiavePulita(chiave),
     });
   }
 
@@ -105,6 +113,9 @@
 
   function messaggioErrore(stato, corpo) {
     const basso = String(corpo || "").toLowerCase();
+    if (basso.indexOf("invalid api key") >= 0) {
+      return "La chiave anon non è quella giusta. Ricopiala, deve iniziare con sb_publishable_.";
+    }
     if (stato === 400 && (basso.indexOf("invalid") >= 0 || basso.indexOf("credentials") >= 0)) {
       return "Email o password non giuste.";
     }

@@ -80,6 +80,12 @@ test("la ricetta si riconosce da piatto e ingrediente", function () {
   assert.equal(esito.stato.ricette.length, 1);
 });
 
+test("la chiave pubblicabile accetta la S maiuscola iniziale", function () {
+  assert.equal(sync.normalizzaChiave("Sb_publishable_AbC12"), "sb_publishable_AbC12");
+  assert.equal(sync.normalizzaChiave(" sb_publishable_AbC12 "), "sb_publishable_AbC12");
+  assert.equal(sync.normalizzaChiave("eyJabc.def"), "eyJabc.def");
+});
+
 test("legge anche le righe oltre le prime mille", async function () {
   const chiamate = [];
   const tutte = await sync.raccogli(async function (da, pagina) {
