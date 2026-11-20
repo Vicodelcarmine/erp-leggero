@@ -26,6 +26,7 @@ PREV = ROOT / "preventivi_link.json"
 # https pubblico di questo programma (Tailscale Funnel sulla porta 8443).
 # La 443 resta il gestionale: non la sostituiamo.
 BASE_PUBBLICA = "https://imac-di-ivo.tail178446.ts.net:8443"
+ORIGINE_TELEFONO = "https://vicodelcarmine.github.io"
 _base_ok = {"ok": False, "t": 0.0}
 _lock = threading.Lock()
 _prev_lock = threading.Lock()
@@ -121,6 +122,18 @@ def _base():
 
 def _url_link(token):
     return _base().rstrip("/") + "/preventivo/r/" + token
+
+
+def _origine_telefono(origine):
+    return str(origine or "").rstrip("/") == ORIGINE_TELEFONO
+
+
+def _api_preventivi(path):
+    return path == "/api/preventivi" or path.startswith("/api/preventivi/")
+
+
+def _pubblico_ammesso(path):
+    return path.startswith("/preventivo/r/") or _api_preventivi(path)
 
 
 def _numero(valore):
@@ -948,11 +961,17 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def _cors(self):
+        if _origine_telefono(self.headers.get("Origin") or ""):
+            self.send_header("Access-Control-Allow-Origin", ORIGINE_TELEFONO)
+            self.send_header("Vary", "Origin")
+
     def _json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self._cors()
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -978,10 +997,23 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._host_pubblico():
             return False
         path = urlparse(self.path).path
-        if path.startswith("/preventivo/r/"):
+        if _pubblico_ammesso(path):
             return False
         self.send_error(404)
         return True
+
+    def do_OPTIONS(self):
+        path = urlparse(self.path).path
+        if not _api_preventivi(path) or not _origine_telefono(self.headers.get("Origin") or ""):
+            self.send_error(404)
+            return
+        self.send_response(204)
+        self._cors()
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         if self._nega_pubblico():
@@ -1344,6 +1376,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.send_header("Content-Disposition", 'attachment; filename="preventivo-' + nome + '.xlsx"')
         self.send_header("Cache-Control", "no-store")
+        self._cors()
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

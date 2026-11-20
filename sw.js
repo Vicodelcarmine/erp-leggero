@@ -1,4 +1,4 @@
-var CACHE = "erp-leggero-78";
+var CACHE = "erp-leggero-79";
 var FILE = [
   "./",
   "index.html",
@@ -6,26 +6,27 @@ var FILE = [
   "icon-180.png",
   "icon-192.png",
   "icon-512.png",
-  "css/app.css?v=78",
-  "js/format.js?v=78",
-  "js/engine.js?v=78",
-  "js/demo.js?v=78",
-  "js/azioni.js?v=78",
-  "vendor/pdf.min.js?v=78",
-  "vendor/pdf.worker.min.js?v=78",
-  "js/metro.js?v=78",
-  "js/pdf_testo.js?v=78",
-  "js/db.js?v=78",
-  "js/cassa.js?v=78",
-  "js/codice_piatto.js?v=78",
-  "js/unita_qta.js?v=78",
-  "js/conteggio.js?v=78",
-  "js/codici.js?v=78",
-  "js/archivio_config.js?v=78",
-  "js/archivio_sync.js?v=78",
-  "js/archivio.js?v=78",
-  "js/pdf_lista.js?v=78",
-  "js/ui.js?v=78"
+  "css/app.css?v=79",
+  "js/format.js?v=79",
+  "js/engine.js?v=79",
+  "js/demo.js?v=79",
+  "js/azioni.js?v=79",
+  "vendor/pdf.min.js?v=79",
+  "vendor/pdf.worker.min.js?v=79",
+  "js/metro.js?v=79",
+  "js/pdf_testo.js?v=79",
+  "js/db.js?v=79",
+  "js/cassa.js?v=79",
+  "js/codice_piatto.js?v=79",
+  "js/unita_qta.js?v=79",
+  "js/conteggio.js?v=79",
+  "js/codici.js?v=79",
+  "js/archivio_config.js?v=79",
+  "js/archivio_sync.js?v=79",
+  "js/archivio.js?v=79",
+  "js/preventivi_server.js?v=79",
+  "js/pdf_lista.js?v=79",
+  "js/ui.js?v=79"
 ];
 
 self.addEventListener("install", function (e) {

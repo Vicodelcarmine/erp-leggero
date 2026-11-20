@@ -785,6 +785,29 @@
     });
   }
 
+  function urlApiPreventivo(path) {
+    const origine = (typeof location !== "undefined" && location.origin) || "";
+    if (window.ErpPreventiviServer) return ErpPreventiviServer.url(origine, path);
+    return path;
+  }
+
+  function messaggioPreventivo(e) {
+    const t = e && e.message ? String(e.message) : "";
+    if (!t || t === "Failed to fetch" || t.indexOf("NetworkError") >= 0 || t.indexOf("Unexpected token") === 0) {
+      return "Il computer del locale non risponde. Accendilo e riprova.";
+    }
+    return t;
+  }
+
+  async function leggiRispostaPreventivo(res) {
+    const testo = await res.text();
+    try {
+      return JSON.parse(testo);
+    } catch (e) {
+      throw new Error("Il computer del locale non risponde. Accendilo e riprova.");
+    }
+  }
+
   function urlPreventivo(token) {
     const base = String(basePreventivi || "").replace(/\/$/, "");
     if (!base || !token) return "";
@@ -803,7 +826,7 @@
     }
     html += '<div class="azioni">';
     html += '<button type="button" class="tasto-grosso" data-act="prev-wa" data-url="' + esc(url) + '" data-fornitore="' + esc(fornitore) + '" data-scade="' + esc(scade || "") + '">WhatsApp</button>';
-    html += '<a class="tasto-grosso" href="/api/preventivi/' + encodeURIComponent(token) + '/excel">Excel</a>';
+    html += '<a class="tasto-grosso" href="' + esc(urlApiPreventivo("/api/preventivi/" + encodeURIComponent(token) + "/excel")) + '">Excel</a>';
     html += '<button type="button" class="tasto-grosso tasto-chiaro" data-act="prev-copia" data-url="' + esc(url) + '">Copia link</button>';
     html += "</div>";
     if (copiaAvviso && copiaAvvisoUrl === url) html += '<p class="entra">' + esc(copiaAvviso) + "</p>";
@@ -2616,12 +2639,12 @@
   async function caricaPreventivi() {
     let data = null;
     try {
-      const res = await fetch("/api/preventivi");
-      data = await res.json();
+      const res = await fetch(urlApiPreventivo("/api/preventivi"));
+      data = await leggiRispostaPreventivo(res);
       if (!res.ok || !data.ok) throw new Error(data.errore || "Non leggo i preventivi.");
     } catch (e) {
       preventiviServer = [];
-      msg("Il computer non risponde. Il link funziona solo con il programma acceso.", true);
+      msg(messaggioPreventivo(e), true);
       render();
       return;
     }
@@ -2659,8 +2682,8 @@
   async function aggiornaPreventivi() {
     let data = null;
     try {
-      const res = await fetch("/api/preventivi");
-      data = await res.json();
+      const res = await fetch(urlApiPreventivo("/api/preventivi"));
+      data = await leggiRispostaPreventivo(res);
       if (!res.ok || !data.ok) return;
     } catch (e) { return; }
     if (data.base) basePreventivi = data.base;
@@ -2719,7 +2742,7 @@
       if (!scelti.length) { msg("Scegli almeno una categoria.", true); dopo(); return; }
       let data = null;
       try {
-        const res = await fetch("/api/preventivi", {
+        const res = await fetch(urlApiPreventivo("/api/preventivi"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2729,10 +2752,10 @@
             articoli: scelti.map(function (a) { return { id: a.id, nome: a.nome, udm: a.udm }; }),
           }),
         });
-        data = await res.json();
+        data = await leggiRispostaPreventivo(res);
         if (!res.ok || !data.ok) throw new Error(data.errore || "Non sono riuscito a creare il link.");
       } catch (e) {
-        msg(e.message || "Il computer non risponde. Il link funziona solo con il programma acceso.", true);
+        msg(messaggioPreventivo(e), true);
         dopo();
         return;
       }
@@ -3219,7 +3242,7 @@
       try { await ErpDb.salva(stato); }
       catch (e) { msg("Non sono riuscito a salvare in questo browser. Scarica il backup da Dati.", true); render(); return; }
       try {
-        await fetch("/api/preventivi/" + encodeURIComponent(token) + "/importato", { method: "POST" });
+        await fetch(urlApiPreventivo("/api/preventivi/" + encodeURIComponent(token) + "/importato"), { method: "POST" });
         l.stato = "importato";
       } catch (e) { /* il prezzo è già nel confronto: al prossimo giro non lo duplico */ }
       msg(saltati
@@ -3231,7 +3254,7 @@
     if (act === "prev-scarta") {
       const token = nodo.dataset.token || "";
       try {
-        await fetch("/api/preventivi/" + encodeURIComponent(token) + "/scarta", { method: "POST" });
+        await fetch(urlApiPreventivo("/api/preventivi/" + encodeURIComponent(token) + "/scarta"), { method: "POST" });
       } catch (e) {
         msg("Non sono riuscito a scartarlo. Il computer non risponde.", true);
         render();
@@ -3755,7 +3778,7 @@
       const origine = s.box.dataset.id;
       stato.offerte = (stato.offerte || []).filter(function (o) { return o.origine !== origine; });
       const token = String(origine || "").replace(/^prev-/, "");
-      fetch("/api/preventivi/" + encodeURIComponent(token) + "/togli", { method: "POST" }).catch(function () {});
+      fetch(urlApiPreventivo("/api/preventivi/" + encodeURIComponent(token) + "/togli"), { method: "POST" }).catch(function () {});
       msg("Preventivo tolto. La giacenza non cambia.", false);
     } else if (tipo === "carico") {
       ErpAzioni.eliminaCarico(stato, s.box.dataset.id);
