@@ -169,6 +169,7 @@ button.tasto-escludi {
   gap: 10px;
   align-items: center;
   background: var(--carta);
+  border: 2px solid #8ec8ff;
   border-radius: 16px;
   padding: 14px 12px;
   margin: 8px 0;
@@ -540,7 +541,12 @@ button.tasto-escludi {
   border-left: 4px solid var(--azzurro);
 }
 
-.riga-piatto { border: 1px solid var(--azzurro); }
+.riga-piatto { border: 2px solid #8ec8ff; }
+
+.scorri {
+  border: 2px solid #8ec8ff;
+}
+.scorri .riga { border: 0; }
 
 .riga-figlio {
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -703,6 +709,7 @@ summary { cursor: pointer; font-weight: 750; min-height: 44px; }
 label.tasto-grosso { cursor: pointer; }
 .blocco-fattura {
   background: var(--carta);
+  border: 2px solid #8ec8ff;
   border-radius: 16px;
   padding: 14px 14px 16px;
   margin: 12px 0;
@@ -722,6 +729,7 @@ select.lista-ing option { background: #0c1b33; color: #86efac; font-weight: 750;
   align-items: center;
   gap: 12px;
   background: var(--carta);
+  border: 2px solid #8ec8ff;
   border-radius: 16px;
   padding: 10px 12px;
   margin: 8px 0;
@@ -743,7 +751,8 @@ select.lista-ing { color: #86efac; font-weight: 750; }
 .gruppo-n { color: var(--muto); font-size: 1rem; font-weight: 750; white-space: nowrap; }
 .gruppo-food { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .pct-cat { color: var(--arancio); font-size: 1.7rem; font-weight: 750; font-variant-numeric: tabular-nums; }
-.gruppo-cat .mese-corpo .riga { margin-bottom: 0; }
+.gruppo-cat .mese-corpo .riga,
+.gruppo-cat .mese-corpo .scorri { margin-top: 8px; margin-bottom: 8px; }
 button.scelta-art {
   width: 100%;
   border: 0;
@@ -774,6 +783,7 @@ a.cat-apri {
   flex: 0 0 86%;
   scroll-snap-align: start;
   background: var(--carta);
+  border: 2px solid #8ec8ff;
   border-radius: 16px;
   padding: 14px 14px 8px;
 }
