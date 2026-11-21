@@ -833,6 +833,11 @@
     return html;
   }
 
+  function preventivoGiaNeiPrezzi(token) {
+    const origine = "prev-" + token;
+    return (stato.offerte || []).some(function (o) { return o.origine === origine; });
+  }
+
   function vistaRevisione(token) {
     if (!preventiviCaricati) {
       preventiviCaricati = true;
@@ -841,7 +846,7 @@
     const l = (preventiviServer || []).find(function (x) { return x.token === token; });
     let html = '<a class="indietro" href="#/preventivi">Preventivi</a>';
     if (!l) return html + '<p class="muto">Sto aprendo il preventivo.</p>';
-    if (l.stato !== "inviato") return html + '<p class="muto">Questo preventivo non è da controllare.</p>';
+    if (!ErpPreventiviServer.daLeggere(l.stato)) return html + '<p class="muto">Questo preventivo non è da controllare.</p>';
     const nomi = {};
     (l.articoli || []).forEach(function (a) { nomi[a.id] = a.nome; });
     html += '<p class="etichetta">Da controllare</p>';
@@ -874,8 +879,14 @@
         + scelta
         + "</article>";
     }).join("");
-    html += '<button type="button" class="tasto-grosso" data-act="prev-carica" data-token="' + esc(token) + '">Carica</button>';
-    html += '<button type="button" class="tasto-grosso tasto-chiaro" data-act="prev-scarta" data-token="' + esc(token) + '">Scarta</button>';
+    if (preventivoGiaNeiPrezzi(token)) {
+      html += '<p class="muto">Questi prezzi sono già nel confronto.</p>';
+    } else {
+      html += '<button type="button" class="tasto-grosso" data-act="prev-carica" data-token="' + esc(token) + '">Carica</button>';
+    }
+    if (l.stato === "inviato") {
+      html += '<button type="button" class="tasto-grosso tasto-chiaro" data-act="prev-scarta" data-token="' + esc(token) + '">Scarta</button>';
+    }
     return html;
   }
 
@@ -888,18 +899,24 @@
     const categorie = categorieDegliUsati();
     const scelte = categorie.filter(function (c) { return categoriePreventivo[c]; });
     const nelLink = articoli.filter(function (a) { return scelte.indexOf(a.categoria) >= 0; });
-    const daControllare = (preventiviServer || []).filter(function (l) { return l.stato === "inviato"; });
+    const daControllare = (preventiviServer || []).filter(function (l) { return ErpPreventiviServer.daLeggere(l.stato); });
     let html = "";
     if (daControllare.length) {
       html += '<div class="blocco-fattura">';
-      html += '<p class="etichetta">Da controllare</p>';
+      html += '<p class="etichetta">Compilato dal fornitore</p>';
       html += '<p class="numero">' + daControllare.length + "</p>";
-      html += "<p>" + (daControllare.length === 1 ? "preventivo arrivato. Aprilo, poi caricalo o scartalo." : "preventivi arrivati. Aprili, poi caricali o scartali.") + "</p>";
+      html += "<p>" + (daControllare.length === 1 ? "preventivo arrivato. Aprilo e leggi i prezzi. Entra nel confronto solo se premi Carica." : "preventivi arrivati. Aprili e leggi i prezzi. Entrano nel confronto solo se premi Carica.") + "</p>";
       html += "</div>";
       html += daControllare.map(function (l) {
+        const n = (l.righe || []).length;
+        const gia = preventivoGiaNeiPrezzi(l.token);
+        const frase = l.stato === "inviato"
+          ? "Da controllare"
+          : (gia ? "Già nei prezzi" : "Compilato. Aprilo e premi Carica.");
         return '<a class="blocco-fattura" href="#/preventivi/scheda/' + encodeURIComponent(l.token) + '">'
           + '<p class="riga-nome">' + esc(l.fornitore || "Fornitore") + "</p>"
-          + '<p class="muto">' + esc(l.inviato ? ErpFormat.dataIT(l.inviato) : "") + "</p></a>";
+          + '<p class="muto">' + esc((l.inviato ? ErpFormat.dataIT(l.inviato) + " · " : "") + n + " prezzi") + "</p>"
+          + '<p class="muto">' + esc(frase) + "</p></a>";
       }).join("");
     }
     html += '<p class="muto">Crei un link e lo mandi al fornitore. Lui scrive i prezzi degli articoli che usi. Il fornitore apre il link finché il computer del locale è acceso. Il preventivo non entra nei prezzi finché non lo carichi.</p>';
@@ -3201,7 +3218,7 @@
     if (act === "prev-carica") {
       const token = nodo.dataset.token || "";
       const l = (preventiviServer || []).find(function (x) { return x.token === token; });
-      if (!l || l.stato !== "inviato") return;
+      if (!l || !ErpPreventiviServer.daLeggere(l.stato)) return;
       const origine = "prev-" + token;
       let caricati = 0;
       let saltati = 0;
@@ -3212,6 +3229,10 @@
           idIng = sel ? sel.value : "";
           if (!idIng) { saltati += 1; return; }
         }
+        const gia = (stato.offerte || []).some(function (o) {
+          return o.origine === origine && ErpEngine.codice(o.idIngrediente) === ErpEngine.codice(idIng);
+        });
+        if (gia) return;
         const art = (l.articoli || []).find(function (a) { return a.id === idIng; });
         const esito = ErpAzioni.registraOfferta(stato, {
           idIngrediente: idIng,

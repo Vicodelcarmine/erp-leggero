@@ -21,5 +21,9 @@
     return baseDi(origine) + path;
   }
 
-  return { BASE: BASE, baseDi: baseDi, url: url };
+  function daLeggere(stato) {
+    return stato === "inviato" || stato === "importato";
+  }
+
+  return { BASE: BASE, baseDi: baseDi, url: url, daLeggere: daLeggere };
 });

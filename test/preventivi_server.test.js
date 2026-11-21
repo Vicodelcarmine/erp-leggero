@@ -17,6 +17,14 @@ test("sul Mac il link resta sulla stessa origine", function () {
   assert.equal(server.url("http://127.0.0.1:8877", "/api/preventivi"), "/api/preventivi");
 });
 
+test("un preventivo compilato resta apribile anche dopo il carica", function () {
+  assert.equal(server.daLeggere("inviato"), true);
+  assert.equal(server.daLeggere("importato"), true);
+  assert.equal(server.daLeggere("aperto"), false);
+  assert.equal(server.daLeggere("tolto"), false);
+  assert.equal(server.daLeggere("scartato"), false);
+});
+
 test("l'indirizzo del Mac è lo stesso del programma che tiene i link", function () {
   const servi = fs.readFileSync(path.join(__dirname, "../servi.py"), "utf8");
   const riga = servi.split("\n").find(function (l) { return l.startsWith("BASE_PUBBLICA = "); });
