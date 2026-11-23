@@ -113,8 +113,9 @@
     return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
   }
 
-  function trovaIng(stato, id) {
+  function trovaIng(stato, id, ctx) {
     const k = codice(id);
+    if (ctx) return ctx.ingredienti.get(k) || null;
     return (stato.ingredienti || []).find(function (i) { return codice(i.id) === k; }) || null;
   }
 
@@ -131,35 +132,141 @@
     return true;
   }
 
-  function sommaCarichi(stato, id, daEscluso, aIncluso) {
-    const k = codice(id);
-    let tot = 0;
-    (stato.carichi || []).forEach(function (c) {
-      if (codice(c.idIngrediente) !== k) return;
-      if (!nelPeriodo(c.at, daEscluso, aIncluso)) return;
-      tot += Number(c.quantita) || 0;
+  function prepara(stato) {
+    const ingredienti = new Map();
+    (stato.ingredienti || []).forEach(function (i) {
+      ingredienti.set(codice(i.id), i);
     });
-    return tot;
-  }
-
-  function consumoTeorico(stato, id, daEscluso, aIncluso) {
-    const k = codice(id);
-    let tot = 0;
+    const ricettePerPiatto = new Map();
+    (stato.ricette || []).forEach(function (r) {
+      const piatto = codice(r.idPiatto);
+      const ing = codice(r.idIngrediente);
+      if (!piatto || !ing) return;
+      if (!ricettePerPiatto.has(piatto)) ricettePerPiatto.set(piatto, []);
+      ricettePerPiatto.get(piatto).push({ id: ing, quantita: Number(r.quantita) || 0 });
+    });
+    const consumi = new Map();
+    const venditePerPiatto = new Map();
     (stato.vendite || []).forEach(function (v) {
-      if (!nelPeriodo(v.at, daEscluso, aIncluso)) return;
       const qv = Number(v.quantita) || 0;
       if (qv <= 0) return;
-      (stato.ricette || []).forEach(function (r) {
-        if (codice(r.idPiatto) !== codice(v.idPiatto)) return;
-        if (codice(r.idIngrediente) !== k) return;
-        tot += qv * (Number(r.quantita) || 0);
-      });
+      const at = String(v.at || "");
+      const piatto = codice(v.idPiatto);
+      if (at && piatto) {
+        const righe = ricettePerPiatto.get(piatto);
+        if (righe) {
+          righe.forEach(function (r) {
+            if (!consumi.has(r.id)) consumi.set(r.id, []);
+            consumi.get(r.id).push({ at: at, q: qv * r.quantita });
+          });
+        }
+      }
+      if (!piatto) return;
+      if (!venditePerPiatto.has(piatto)) venditePerPiatto.set(piatto, { qta: 0, ricavo: 0, qtaPrezzo: 0 });
+      const box = venditePerPiatto.get(piatto);
+      box.qta += qv;
+      if (v.prezzoUnitario != null && Number(v.prezzoUnitario) >= 0 && v.prezzoUnitario !== "") {
+        box.ricavo += qv * Number(v.prezzoUnitario);
+        box.qtaPrezzo += qv;
+      }
     });
-    return tot;
+    consumi.forEach(chiudiSomme);
+    const carichi = new Map();
+    (stato.carichi || []).forEach(function (c) {
+      const id = codice(c.idIngrediente);
+      const at = String(c.at || "");
+      if (!id || !at) return;
+      if (!carichi.has(id)) carichi.set(id, []);
+      carichi.get(id).push({ at: at, q: Number(c.quantita) || 0 });
+    });
+    carichi.forEach(chiudiSomme);
+    const inventari = new Map();
+    (stato.inventari || []).forEach(function (i) {
+      const id = codice(i.idIngrediente);
+      if (!id || !i.at) return;
+      if (!inventari.has(id)) inventari.set(id, []);
+      inventari.get(id).push(i);
+    });
+    inventari.forEach(function (lista) {
+      lista.sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); });
+    });
+    const offerte = new Map();
+    (stato.offerte || []).forEach(function (o) {
+      const id = codice(o.idIngrediente);
+      if (!id) return;
+      if (!offerte.has(id)) offerte.set(id, []);
+      offerte.get(id).push(o);
+    });
+    return {
+      ingredienti: ingredienti,
+      ricettePerPiatto: ricettePerPiatto,
+      consumi: consumi,
+      venditePerPiatto: venditePerPiatto,
+      carichi: carichi,
+      inventari: inventari,
+      offerte: offerte,
+    };
   }
 
-  function inventariDi(stato, id) {
+  function chiudiSomme(lista) {
+    lista.sort(function (a, b) {
+      if (a.at < b.at) return -1;
+      if (a.at > b.at) return 1;
+      return 0;
+    });
+    let s = 0;
+    lista.forEach(function (e) {
+      s += e.q;
+      e.somma = s;
+    });
+  }
+
+  function sommaEventi(lista, daEscluso, aIncluso) {
+    if (!lista || !lista.length) return 0;
+    let lo = 0;
+    if (daEscluso) {
+      let a = 0;
+      let b = lista.length;
+      while (a < b) {
+        const m = (a + b) >> 1;
+        if (lista[m].at > daEscluso) b = m;
+        else a = m + 1;
+      }
+      lo = a;
+    }
+    let hi = lista.length;
+    if (aIncluso) {
+      let a = lo;
+      let b = lista.length;
+      while (a < b) {
+        const m = (a + b) >> 1;
+        if (lista[m].at <= aIncluso) a = m + 1;
+        else b = m;
+      }
+      hi = a;
+    }
+    if (hi <= lo) return 0;
+    const prima = lo > 0 ? lista[lo - 1].somma : 0;
+    return lista[hi - 1].somma - prima;
+  }
+
+  function ctxDi(stato, ctx) {
+    return ctx || prepara(stato);
+  }
+
+  function sommaCarichi(stato, id, daEscluso, aIncluso, ctx) {
+    const c = ctxDi(stato, ctx);
+    return sommaEventi(c.carichi.get(codice(id)), daEscluso, aIncluso);
+  }
+
+  function consumoTeorico(stato, id, daEscluso, aIncluso, ctx) {
+    const c = ctxDi(stato, ctx);
+    return sommaEventi(c.consumi.get(codice(id)), daEscluso, aIncluso);
+  }
+
+  function inventariDi(stato, id, ctx) {
     const k = codice(id);
+    if (ctx) return (ctx.inventari.get(k) || []).slice();
     return (stato.inventari || [])
       .filter(function (i) { return codice(i.idIngrediente) === k && i.at; })
       .slice()
@@ -176,11 +283,13 @@
     return a;
   }
 
-  function prezzoIngrediente(stato, id) {
-    const ing = trovaIng(stato, id);
+  function prezzoIngrediente(stato, id, ctx) {
+    const c = ctx || null;
+    const ing = trovaIng(stato, id, c);
     const k = codice(id);
     const perFornitore = new Map();
-    (stato.offerte || []).forEach(function (o) {
+    const offerte = c ? (c.offerte.get(k) || []) : (stato.offerte || []);
+    offerte.forEach(function (o) {
       if (codice(o.idIngrediente) !== k) return;
       if (!(Number(o.prezzoUdm) > 0)) return;
       const fk = chiaveFornitore(o.fornitore);
@@ -204,8 +313,9 @@
     };
   }
 
-  function sfridoIngrediente(stato, id) {
-    const ing = trovaIng(stato, id);
+  function sfridoIngrediente(stato, id, ctx) {
+    const c = ctx || null;
+    const ing = trovaIng(stato, id, c);
     const tempo = !!(ing && ing.tipo === "TEMPO");
     const vuoto = {
       coef: 1,
@@ -215,16 +325,16 @@
       teorico: 0,
     };
     if (!ing || tempo) return vuoto;
-    const inv = inventariDi(stato, id);
+    const inv = inventariDi(stato, id, c);
     const periodi = [];
     let sumR = 0;
     let sumT = 0;
     for (let i = 1; i < inv.length; i += 1) {
       const a = inv[i - 1];
       const b = inv[i];
-      const theo = consumoTeorico(stato, id, a.at, b.at);
+      const theo = consumoTeorico(stato, id, a.at, b.at, c);
       if (theo <= EPS) continue;
-      const car = sommaCarichi(stato, id, a.at, b.at);
+      const car = sommaCarichi(stato, id, a.at, b.at, c);
       const real = (Number(a.reale) || 0) + car - (Number(b.reale) || 0);
       if (real < 0) continue;
       sumR += real;
@@ -247,21 +357,22 @@
     return { coef: coef, fonte: "inventari", periodi: periodi, reale: sumR, teorico: sumT, clamp: clamp };
   }
 
-  function consumoTempo(stato, id, oggi) {
-    const ing = trovaIng(stato, id);
+  function consumoTempo(stato, id, oggi, ctx) {
+    const c = ctx || null;
+    const ing = trovaIng(stato, id, c);
     if (!ing || ing.tipo !== "TEMPO") {
       return { giornaliero: 0, fonte: "non_applicabile", giorni: 0 };
     }
     if (Number(ing.consumoForzato) > 0) {
       return { giornaliero: Number(ing.consumoForzato), fonte: "forzatura", giorni: 0 };
     }
-    const inv = inventariDi(stato, id);
+    const inv = inventariDi(stato, id, c);
     if (inv.length >= 2) {
       const a = inv[inv.length - 2];
       const b = inv[inv.length - 1];
       const giorni = giorniTra(a.at, b.at);
       if (giorni > 0) {
-        const car = sommaCarichi(stato, id, a.at, b.at);
+        const car = sommaCarichi(stato, id, a.at, b.at, c);
         const tot = (Number(a.reale) || 0) + car - (Number(b.reale) || 0);
         if (tot > EPS) {
           return { giornaliero: tot / giorni, fonte: "conteggi", giorni: giorni, consumo: tot };
@@ -274,33 +385,37 @@
     return { giornaliero: 0, fonte: "nessuno", giorni: 0 };
   }
 
-  function giacenzaIngrediente(stato, id, oggi) {
-    const ing = trovaIng(stato, id);
+  function giacenzaIngrediente(stato, id, oggi, ctx) {
+    const c = ctxDi(stato, ctx);
+    const ing = trovaIng(stato, id, c);
     if (!ing) return 0;
     const fino = fineGiorno(oggi);
-    const inv = inventariDi(stato, id);
+    const inv = inventariDi(stato, id, c);
     const ultimo = inv.length ? inv[inv.length - 1] : null;
     if (ing.tipo === "TEMPO") {
-      const rate = consumoTempo(stato, id, oggi).giornaliero;
+      const rate = consumoTempo(stato, id, oggi, c).giornaliero;
       if (!ultimo) {
-        const tutti = (stato.carichi || []).filter(function (c) {
-          return codice(c.idIngrediente) === codice(id) && nelPeriodo(c.at, "", fino);
+        const lista = c.carichi.get(codice(id)) || [];
+        let tot = 0;
+        let primo = "";
+        lista.forEach(function (e) {
+          if (!nelPeriodo(e.at, "", fino)) return;
+          if (!primo) primo = e.at;
+          tot += e.q;
         });
-        if (!tutti.length) return 0;
-        const primo = tutti.slice().sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); })[0];
-        const tot = tutti.reduce(function (s, c) { return s + (Number(c.quantita) || 0); }, 0);
-        return tot - rate * Math.max(0, giorniTra(primo.at, oggi));
+        if (!primo) return 0;
+        return tot - rate * Math.max(0, giorniTra(primo, oggi));
       }
       const giorni = Math.max(0, giorniTra(ultimo.at, oggi));
-      const car = sommaCarichi(stato, id, ultimo.at, fino);
+      const car = sommaCarichi(stato, id, ultimo.at, fino, c);
       return (Number(ultimo.reale) || 0) + car - rate * giorni;
     }
     if (!ultimo) {
-      return sommaCarichi(stato, id, "", fino) - consumoTeorico(stato, id, "", fino);
+      return sommaCarichi(stato, id, "", fino, c) - consumoTeorico(stato, id, "", fino, c);
     }
     return (Number(ultimo.reale) || 0)
-      + sommaCarichi(stato, id, ultimo.at, fino)
-      - consumoTeorico(stato, id, ultimo.at, fino);
+      + sommaCarichi(stato, id, ultimo.at, fino, c)
+      - consumoTeorico(stato, id, ultimo.at, fino, c);
   }
 
   function opzioniDi(stato, opts) {
@@ -313,25 +428,26 @@
     };
   }
 
-  function profiloIngrediente(stato, id, oggi, opts) {
-    const ing = trovaIng(stato, id);
+  function profiloIngrediente(stato, id, oggi, opts, ctx) {
+    const c = ctxDi(stato, ctx);
+    const ing = trovaIng(stato, id, c);
     if (!ing) return null;
     const op = opzioniDi(stato, Object.assign({ oggi: oggi }, opts || {}));
     const tempo = ing.tipo === "TEMPO";
-    const sfr = sfridoIngrediente(stato, id);
-    const giacenza = giacenzaIngrediente(stato, id, op.oggi);
-    const prezzo = prezzoIngrediente(stato, id);
+    const sfr = sfridoIngrediente(stato, id, c);
+    const giacenza = giacenzaIngrediente(stato, id, op.oggi, c);
+    const prezzo = prezzoIngrediente(stato, id, c);
     let consumoMedio = 0;
     let fonte = "nessuno";
     let giorniCop = op.giorniCopertura;
     if (tempo) {
-      const c = consumoTempo(stato, id, op.oggi);
-      consumoMedio = c.giornaliero;
-      fonte = c.fonte === "conteggi" ? "tempo" : c.fonte;
+      const tempoOra = consumoTempo(stato, id, op.oggi, c);
+      consumoMedio = tempoOra.giornaliero;
+      fonte = tempoOra.fonte === "conteggi" ? "tempo" : tempoOra.fonte;
       giorniCop = Math.max(1, Number(ing.giorniCopertura) || op.giorniCopertura);
     } else {
       const lo = fineGiorno(aggiungiGiorni(op.oggi, -op.giorniStorico));
-      const theo = consumoTeorico(stato, id, lo, fineGiorno(op.oggi));
+      const theo = consumoTeorico(stato, id, lo, fineGiorno(op.oggi), c);
       if (theo > EPS) {
         consumoMedio = (theo * sfr.coef) / op.giorniStorico;
         fonte = "storico";
@@ -422,9 +538,10 @@
 
   function propostaOrdini(stato, opts) {
     const op = opzioniDi(stato, opts);
+    const ctx = prepara(stato);
     const righe = [];
     (stato.ingredienti || []).forEach(function (ing) {
-      const r = rigaOrdine(profiloIngrediente(stato, ing.id, op.oggi, op));
+      const r = rigaOrdine(profiloIngrediente(stato, ing.id, op.oggi, op, ctx));
       if (r) righe.push(r);
     });
     righe.sort(function (a, b) {
@@ -459,27 +576,28 @@
   }
 
   function foodCost(stato) {
+    const ctx = prepara(stato);
     const piatti = [];
     (stato.piatti || []).forEach(function (p) {
       const righe = [];
       let costoTeorico = 0;
       let costoReale = 0;
       const mancano = [];
-      (stato.ricette || []).forEach(function (r) {
-        if (codice(r.idPiatto) !== codice(p.id)) return;
-        const ing = trovaIng(stato, r.idIngrediente);
-        const prezzo = prezzoIngrediente(stato, r.idIngrediente);
+      const idPiatto = codice(p.id);
+      (ctx.ricettePerPiatto.get(idPiatto) || []).forEach(function (r) {
+        const ing = trovaIng(stato, r.id, ctx);
+        const prezzo = prezzoIngrediente(stato, r.id, ctx);
         const euroU = prezzo ? prezzo.prezzoUdm : 0;
-        const coef = ing && ing.tipo === "TEMPO" ? 1 : sfridoIngrediente(stato, r.idIngrediente).coef;
-        const q = Number(r.quantita) || 0;
+        const coef = ing && ing.tipo === "TEMPO" ? 1 : sfridoIngrediente(stato, r.id, ctx).coef;
+        const q = r.quantita;
         const ct = q * euroU;
         const cr = q * coef * euroU;
         costoTeorico += ct;
         costoReale += cr;
-        if (!prezzo) mancano.push(ing ? ing.nome : codice(r.idIngrediente));
+        if (!prezzo) mancano.push(ing ? ing.nome : r.id);
         righe.push({
-          id: codice(r.idIngrediente),
-          nome: ing ? ing.nome : codice(r.idIngrediente),
+          id: r.id,
+          nome: ing ? ing.nome : r.id,
           quantita: q,
           udm: ing ? ing.udm || "" : "",
           prezzoUdm: prezzo ? prezzo.prezzoUdm : null,
@@ -489,19 +607,10 @@
           costoReale: cr,
         });
       });
-      let qtaVenduta = 0;
-      let ricavo = 0;
-      let qtaConPrezzo = 0;
-      (stato.vendite || []).forEach(function (v) {
-        if (codice(v.idPiatto) !== codice(p.id)) return;
-        const q = Number(v.quantita) || 0;
-        if (q <= 0) return;
-        qtaVenduta += q;
-        if (v.prezzoUnitario != null && Number(v.prezzoUnitario) >= 0 && v.prezzoUnitario !== "") {
-          ricavo += q * Number(v.prezzoUnitario);
-          qtaConPrezzo += q;
-        }
-      });
+      const venduto = ctx.venditePerPiatto.get(idPiatto) || { qta: 0, ricavo: 0, qtaPrezzo: 0 };
+      const qtaVenduta = venduto.qta;
+      const ricavo = venduto.ricavo;
+      const qtaConPrezzo = venduto.qtaPrezzo;
       const listino = Number(p.prezzoListino);
       const incasso = qtaConPrezzo > 0 ? ricavo / qtaConPrezzo : null;
       piatti.push({
@@ -583,8 +692,9 @@
   }
 
   function cruscotto(stato, oggi, opts) {
+    const ctx = prepara(stato);
     return (stato.ingredienti || []).map(function (ing) {
-      return profiloIngrediente(stato, ing.id, oggi, opts);
+      return profiloIngrediente(stato, ing.id, oggi, opts, ctx);
     }).filter(Boolean).sort(function (a, b) {
       return a.nome.localeCompare(b.nome, "it");
     });

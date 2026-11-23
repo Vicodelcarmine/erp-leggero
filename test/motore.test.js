@@ -189,3 +189,32 @@ test("numeri italiani e backup illeggibile", function () {
   assert.equal(conFattura.fatture[0].righe.length, 2);
   assert.equal(engine.statoVuoto().fatture.length, 0);
 });
+
+test("migliaia di vendite non bloccano giacenza e spesa", function () {
+  const stato = engine.statoVuoto();
+  stato.piatti.push({ id: "PIZ-001", nome: "Margherita", categoria: "Pizza", prezzoListino: 8 });
+  for (let i = 0; i < 40; i++) {
+    stato.ingredienti.push({ id: "ING-" + i, nome: "Articolo " + i, udm: "kg", attivo: true, qtaConfezione: 1 });
+  }
+  for (let r = 0; r < 400; r++) {
+    stato.ricette.push({ idPiatto: "PIZ-001", idIngrediente: "ING-" + (r % 40), quantita: 0.01 });
+  }
+  for (let v = 0; v < 3000; v++) {
+    stato.vendite.push({
+      id: "v-" + v,
+      idPiatto: "PIZ-001",
+      quantita: 1,
+      at: "2026-06-01T12:00:" + String(v).padStart(5, "0"),
+      prezzoUnitario: 8,
+    });
+  }
+  const inizio = Date.now();
+  const cru = engine.cruscotto(stato, "2026-11-23");
+  const spesa = engine.propostaOrdini(stato, { oggi: "2026-11-23" });
+  const ms = Date.now() - inizio;
+  const pelati = cru.find(function (r) { return r.id === "ING-0"; });
+  assert.equal(cru.length, 40);
+  assert.ok(Math.abs(pelati.giacenza + 300) < 1e-6);
+  assert.equal(spesa.righe.length, 40);
+  assert.ok(ms < 1500, "conti in " + ms + " ms");
+});

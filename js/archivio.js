@@ -13,6 +13,7 @@
   let coda = Promise.resolve();
   let avvisa = function () {};
   let ultimoErrore = "";
+  let copiaRemota = null;
 
   function memoria() {
     try { return root.localStorage; } catch (e) { return null; }
@@ -109,6 +110,7 @@
     sessione = null;
     scriviJson(CHIAVE_SESSIONE, null);
     inAttesa = false;
+    copiaRemota = null;
   }
 
   function messaggioErrore(stato, corpo) {
@@ -184,15 +186,62 @@
     return run;
   }
 
+  const SELECT_RIGHE = "collezione,id,corpo,updated_at";
+
   async function leggiRighe(access) {
     return root.ErpArchivioSync.raccogli(function (da, pagina) {
-      return chiedi("/rest/v1/righe?select=collezione,id,corpo&order=collezione.asc,id.asc", {
+      return chiedi("/rest/v1/righe?select=" + SELECT_RIGHE + "&order=collezione.asc,id.asc", {
         headers: {
           Authorization: "Bearer " + access,
           Range: da + "-" + (da + pagina - 1),
         },
       });
     });
+  }
+
+  async function leggiDelta(access, watermark) {
+    const filtro = "&updated_at=gt." + encodeURIComponent(watermark);
+    return root.ErpArchivioSync.raccogli(function (da, pagina) {
+      return chiedi("/rest/v1/righe?select=" + SELECT_RIGHE + filtro + "&order=updated_at.asc,collezione.asc,id.asc", {
+        headers: {
+          Authorization: "Bearer " + access,
+          Range: da + "-" + (da + pagina - 1),
+        },
+      });
+    });
+  }
+
+  async function contaRighe(access) {
+    const c = config();
+    let res;
+    try {
+      res = await fetch(c.url + "/rest/v1/righe?select=id", {
+        method: "GET",
+        headers: {
+          apikey: c.chiave,
+          Authorization: "Bearer " + access,
+          Range: "0-0",
+          Prefer: "count=exact",
+        },
+        cache: "no-store",
+      });
+    } catch (e) {
+      return null;
+    }
+    if (!res.ok && res.status !== 416) return null;
+    return root.ErpArchivioSync.numeroTotale(res.headers.get("content-range"));
+  }
+
+  async function leggiDalServer(access) {
+    if (copiaRemota && copiaRemota.watermark) {
+      const delta = await leggiDelta(access, copiaRemota.watermark);
+      root.ErpArchivioSync.incorpora(copiaRemota, delta);
+      const n = await contaRighe(access);
+      if (n != null && n === copiaRemota.map.size) return root.ErpArchivioSync.righeDi(copiaRemota);
+    }
+    const tutte = await leggiRighe(access);
+    copiaRemota = root.ErpArchivioSync.memoriaRemota(tutte);
+    return tutte;
   }
 
   async function scriviRighe(access, utente, invia) {
@@ -236,7 +285,7 @@
         const access = await token();
         const utente = idUtente(access);
         if (!utente) throw new Error("Entra di nuovo da Dati.");
-        const remote = root.ErpArchivioSync.daRighe(await leggiRighe(access));
+        const remote = root.ErpArchivioSync.daRighe(await leggiDalServer(access));
         ack = leggiJson(CHIAVE_ACK) || ack || {};
         const notePrima = ((stato.note || []).map(function (n) { return n.id; }).sort().join("|"));
         const esito = root.ErpArchivioSync.unisci(stato, remote, ack);

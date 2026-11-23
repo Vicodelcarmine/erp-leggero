@@ -97,3 +97,24 @@ test("legge anche le righe oltre le prime mille", async function () {
   assert.deepEqual(chiamate, ["0:1000", "1000:1000"]);
   assert.equal(tutte.length, 1129);
 });
+
+test("dopo la prima lettura si tengono solo le righe nuove", function () {
+  const memoria = sync.memoriaRemota([
+    { collezione: "vendite", id: "a", corpo: { id: "a", quantita: 1 }, updated_at: "2026-11-20T10:00:00+00:00" },
+  ]);
+  assert.equal(memoria.watermark, "2026-11-20T10:00:00+00:00");
+  assert.equal(sync.incorpora(memoria, [
+    { collezione: "vendite", id: "b", corpo: { id: "b" }, updated_at: "2026-11-21T10:00:00+00:00" },
+  ]), 1);
+  assert.equal(sync.righeDi(memoria).length, 2);
+  sync.incorpora(memoria, [
+    { collezione: "vendite", id: "a", corpo: { id: "a", quantita: 3 }, updated_at: "2026-11-22T10:00:00+00:00" },
+  ]);
+  const a = sync.righeDi(memoria).find(function (r) { return r.id === "a"; });
+  assert.equal(a.corpo.quantita, 3);
+  assert.equal(sync.righeDi(memoria).length, 2);
+  assert.equal(memoria.watermark, "2026-11-22T10:00:00+00:00");
+  assert.equal(sync.numeroTotale("0-0/5528"), 5528);
+  assert.equal(sync.numeroTotale("*/0"), 0);
+  assert.equal(sync.numeroTotale(""), null);
+});

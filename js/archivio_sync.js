@@ -286,6 +286,42 @@
     return stato;
   }
 
+  function memoriaRemota(righe) {
+    const map = new Map();
+    let watermark = "";
+    (righe || []).forEach(function (r) {
+      if (!r || !r.collezione || r.id == null || r.id === "") return;
+      map.set(r.collezione + "\n" + r.id, r);
+      const t = String(r.updated_at || "");
+      if (t > watermark) watermark = t;
+    });
+    return { map: map, watermark: watermark };
+  }
+
+  function incorpora(memoria, delta) {
+    let n = 0;
+    (delta || []).forEach(function (r) {
+      if (!memoria || !r || !r.collezione || r.id == null || r.id === "") return;
+      memoria.map.set(r.collezione + "\n" + r.id, r);
+      const t = String(r.updated_at || "");
+      if (t > memoria.watermark) memoria.watermark = t;
+      n += 1;
+    });
+    return n;
+  }
+
+  function righeDi(memoria) {
+    const out = [];
+    if (!memoria || !memoria.map) return out;
+    memoria.map.forEach(function (r) { out.push(r); });
+    return out;
+  }
+
+  function numeroTotale(contentRange) {
+    const m = /\/(\d+)\s*$/.exec(String(contentRange || ""));
+    return m ? Number(m[1]) : null;
+  }
+
   return {
     unisci: unisci,
     applica: applica,
@@ -296,5 +332,9 @@
     normalizzaChiave: normalizzaChiave,
     canon: canon,
     liste: LISTE,
+    memoriaRemota: memoriaRemota,
+    incorpora: incorpora,
+    righeDi: righeDi,
+    numeroTotale: numeroTotale,
   };
 });
