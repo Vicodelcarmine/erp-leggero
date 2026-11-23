@@ -44,7 +44,7 @@
     if (!lib || !lib.getDocument) {
       throw new Error("Manca la libreria per leggere il PDF.");
     }
-    if (lib.GlobalWorkerOptions) lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js?v=82";
+    if (lib.GlobalWorkerOptions) lib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js?v=83";
     const task = lib.getDocument({ data: buffer, disableWorker: false });
     const doc = await task.promise;
     const parti = [];

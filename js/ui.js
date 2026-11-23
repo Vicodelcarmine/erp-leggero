@@ -2327,6 +2327,9 @@
       })
       + '<button type="submit" class="btn">Ok</button></form>';
     html += '<p class="numero-hero">' + ErpFormat.euro(o.totale) + "</p>";
+    if (!(stato.inventari || []).length) {
+      html += '<p class="muto">Non c\'è ancora un conteggio. La lista è solo il consumo degli ultimi ' + esc(String(imp.giorniStorico)) + " giorni, per " + esc(String(imp.giorniCopertura)) + " giorni. Non ricompra i mesi già venduti.</p>";
+    }
     html += '<button type="button" class="tasto-grosso tasto-chiaro" data-act="spesa-per-me" aria-expanded="' + (spesaPerMe ? "true" : "false") + '">Per me</button>';
     if (togliPresiScaduti()) ErpDb.salva(stato);
     if (!o.righe.length) {
@@ -4172,9 +4175,9 @@
       ErpArchivio.sincronizza(stato).then(function (esito) { if (esito && esito.cambiato) render(); });
     }
     setInterval(function () {
-      if (stato) aggiornaPreventivi();
+      if (stato && route().name === "preventivi") aggiornaPreventivi();
       if (stato && window.ErpArchivio && ErpArchivio.entrato()) {
-        ErpArchivio.sincronizza(stato).then(function (esito) { if (esito && esito.cambiato) render(); });
+        ErpArchivio.sincronizza(stato, { soloSeNovita: true }).then(function (esito) { if (esito && esito.cambiato) render(); });
       }
     }, 8000);
     window.addEventListener("online", function () {

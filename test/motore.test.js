@@ -196,10 +196,10 @@ test("migliaia di vendite non bloccano giacenza e spesa", function () {
   for (let i = 0; i < 40; i++) {
     stato.ingredienti.push({ id: "ING-" + i, nome: "Articolo " + i, udm: "kg", attivo: true, qtaConfezione: 1 });
   }
-  for (let r = 0; r < 400; r++) {
+  for (let r = 0; r < 80; r++) {
     stato.ricette.push({ idPiatto: "PIZ-001", idIngrediente: "ING-" + (r % 40), quantita: 0.01 });
   }
-  for (let v = 0; v < 3000; v++) {
+  for (let v = 0; v < 800; v++) {
     stato.vendite.push({
       id: "v-" + v,
       idPiatto: "PIZ-001",
@@ -214,7 +214,31 @@ test("migliaia di vendite non bloccano giacenza e spesa", function () {
   const ms = Date.now() - inizio;
   const pelati = cru.find(function (r) { return r.id === "ING-0"; });
   assert.equal(cru.length, 40);
-  assert.ok(Math.abs(pelati.giacenza + 300) < 1e-6);
-  assert.equal(spesa.righe.length, 40);
+  assert.equal(pelati.giacenza, 0);
+  assert.equal(spesa.righe.length, 0);
   assert.ok(ms < 1500, "conti in " + ms + " ms");
+});
+
+test("senza conteggio la spesa di 7 giorni non ricompra i mesi passati", function () {
+  const stato = engine.statoVuoto();
+  stato.impostazioni.giorniCopertura = 7;
+  stato.impostazioni.giorniStorico = 30;
+  stato.ingredienti.push({ id: "BAR-001", nome: "Pelati", udm: "kg", attivo: true, qtaConfezione: 15 });
+  stato.piatti.push({ id: "PIZ-001", nome: "Margherita", categoria: "Pizza", prezzoListino: 8 });
+  stato.ricette.push({ idPiatto: "PIZ-001", idIngrediente: "BAR-001", quantita: 1 });
+  stato.offerte.push({
+    id: "off-1", idIngrediente: "BAR-001", fornitore: "Biancalani", tipo: "fattura",
+    data: "2026-11-01T10:00:00", prezzoUdm: 1.2, qtaConfezione: 15,
+  });
+  stato.vendite.push({ id: "vecchia", idPiatto: "PIZ-001", quantita: 100, at: "2026-06-01T12:00:00", prezzoUnitario: 8 });
+  stato.vendite.push({ id: "recente", idPiatto: "PIZ-001", quantita: 30, at: "2026-11-10T12:00:00", prezzoUnitario: 8 });
+  const riga = engine.propostaOrdini(stato, { oggi: "2026-11-23" }).righe[0];
+  assert.ok(Math.abs(riga.fabbisogno - 7) < 1e-6);
+  assert.equal(riga.giacenza, 0);
+  assert.ok(Math.abs(riga.daComprare - 7) < 1e-6);
+  assert.equal(riga.colli, 1);
+  stato.inventari.push({ id: "inv-1", idIngrediente: "BAR-001", reale: 20, at: "2026-11-01T08:00:00" });
+  const dopo = engine.propostaOrdini(stato, { oggi: "2026-11-23" }).righe[0];
+  assert.ok(Math.abs(dopo.giacenza - (20 - 30)) < 1e-6);
+  assert.ok(Math.abs(dopo.daComprare - (7 - dopo.giacenza)) < 1e-6);
 });

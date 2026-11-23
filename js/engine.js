@@ -1,6 +1,7 @@
 /*
  * Motore dell'ERP leggero. Stesse regole del gestionale sul Mac, senza database:
  * - giacenza food = ultimo conteggio + carichi successivi − vendite × ricetta
+ *   Senza nessun conteggio la giacenza è 0: non si trasforma lo storico vendite in un buco da ricomprare.
  * - sfrido = consumo reale cumulato / consumo teorico cumulato, fra 0,10 e 10
  * - lista spesa food = (vendite × ricetta × sfrido negli ultimi N giorni / N) × giorni − giacenza
  * - TEMPO (detersivi): consumo fra gli ultimi due conteggi, senza sfrido da ricetta
@@ -410,9 +411,7 @@
       const car = sommaCarichi(stato, id, ultimo.at, fino, c);
       return (Number(ultimo.reale) || 0) + car - rate * giorni;
     }
-    if (!ultimo) {
-      return sommaCarichi(stato, id, "", fino, c) - consumoTeorico(stato, id, "", fino, c);
-    }
+    if (!ultimo) return 0;
     return (Number(ultimo.reale) || 0)
       + sommaCarichi(stato, id, ultimo.at, fino, c)
       - consumoTeorico(stato, id, ultimo.at, fino, c);

@@ -234,14 +234,20 @@
 
   async function leggiDalServer(access) {
     if (copiaRemota && copiaRemota.watermark) {
+      const prima = copiaRemota.map.size;
       const delta = await leggiDelta(access, copiaRemota.watermark);
       root.ErpArchivioSync.incorpora(copiaRemota, delta);
       const n = await contaRighe(access);
-      if (n != null && n === copiaRemota.map.size) return root.ErpArchivioSync.righeDi(copiaRemota);
+      if (n != null && n === copiaRemota.map.size) {
+        return {
+          righe: root.ErpArchivioSync.righeDi(copiaRemota),
+          fermo: delta.length === 0 && n === prima,
+        };
+      }
     }
     const tutte = await leggiRighe(access);
     copiaRemota = root.ErpArchivioSync.memoriaRemota(tutte);
-    return tutte;
+    return { righe: tutte, fermo: false };
   }
 
   async function scriviRighe(access, utente, invia) {
@@ -276,7 +282,7 @@
     }
   }
 
-  async function sincronizza(stato) {
+  async function sincronizza(stato, opzioni) {
     return inCoda(async function () {
       if (!stato || stato.demo || !entrato()) return { cambiato: false, errore: "" };
       if (occupato) return { cambiato: false, errore: "" };
@@ -285,7 +291,9 @@
         const access = await token();
         const utente = idUtente(access);
         if (!utente) throw new Error("Entra di nuovo da Dati.");
-        const remote = root.ErpArchivioSync.daRighe(await leggiDalServer(access));
+        const letto = await leggiDalServer(access);
+        if (opzioni && opzioni.soloSeNovita && letto.fermo) return { cambiato: false, errore: "" };
+        const remote = root.ErpArchivioSync.daRighe(letto.righe);
         ack = leggiJson(CHIAVE_ACK) || ack || {};
         const notePrima = ((stato.note || []).map(function (n) { return n.id; }).sort().join("|"));
         const esito = root.ErpArchivioSync.unisci(stato, remote, ack);
