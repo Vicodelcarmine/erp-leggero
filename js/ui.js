@@ -2502,7 +2502,10 @@
     registraPagina();
     try {
       const r = route();
-      if (r.name !== "preventivi") preventiviCaricati = false;
+      if (r.name !== "preventivi") {
+        preventiviCaricati = false;
+        togliAvvisoComputer();
+      }
       if (h) {
         h.textContent = titolo();
         const nomeIngrediente = r.name === "magazzino" && r.a === "scheda";
@@ -2582,6 +2585,17 @@
   function msg(testo, errore) {
     banner = testo;
     bannerErrore = !!errore;
+  }
+
+  function avvisoComputer(testo) {
+    return testo === "Il computer del locale non risponde. Accendilo e riprova.";
+  }
+
+  function togliAvvisoComputer() {
+    if (!avvisoComputer(banner)) return false;
+    banner = "";
+    bannerErrore = false;
+    return true;
   }
 
   async function persisti() {
@@ -2671,6 +2685,7 @@
     if (data.base) basePreventivi = data.base;
     preventiviServer = data.link || [];
     notaArriviPreventivi(preventiviServer);
+    togliAvvisoComputer();
     render();
   }
 
@@ -2706,6 +2721,7 @@
       data = await leggiRispostaPreventivo(res);
       if (!res.ok || !data.ok) return;
     } catch (e) { return; }
+    const vaTolto = avvisoComputer(banner);
     if (data.base) basePreventivi = data.base;
     const prima = JSON.stringify((preventiviServer || []).map(function (l) {
       return [l.token, l.stato, l.inviato];
@@ -2715,7 +2731,9 @@
     }));
     preventiviServer = data.link || [];
     notaArriviPreventivi(preventiviServer);
-    if (prima === dopo || staScrivendo()) return;
+    if (staScrivendo()) return;
+    if (vaTolto) togliAvvisoComputer();
+    if (prima === dopo && !vaTolto) return;
     if (route().name === "preventivi") render();
   }
 
